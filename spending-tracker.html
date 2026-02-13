@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#1C1C1E">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>Weekly Expenses</title>
+    <link rel="manifest" href="spending-manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js');
+        }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1C1C1E;
+            color: #FFFFFF;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            overflow-y: auto;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Icons */
+        .icon-button {
+            position: fixed;
+            top: 20px;
+            width: 40px;
+            height: 40px;
+            background: #2C2C2E;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 300;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .icon-button:active {
+            transform: scale(0.9);
+        }
+
+        .icon-button svg {
+            width: 24px;
+            height: 24px;
+            fill: #8E8E93;
+        }
+
+        .icon-button.active svg {
+            fill: #00D54B;
+        }
+
+        .history-icon {
+            left: 20px;
+        }
+
+        .bell-icon {
+            right: 20px;
+        }
+
+        /* Header */
+        .header {
+            padding: 72px 24px 12px;
+            text-align: center;
+        }
+
+        .balance-label {
+            font-size: 14px;
+            color: #8E8E93;
+            margin-bottom: 6px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .balance-display {
+            font-size: 68px;
+            font-weight: 700;
+            letter-spacing: -3px;
+            color: #FFFFFF;
+            margin-bottom: 4px;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.3s ease;
+        }
+
+        .balance-display.negative {
+            color: #FF453A;
+        }
+
+        .input-display {
+            font-size: 52px;
+            color: #FFFFFF;
+            min-height: 62px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .input-display.add {
+            color: #00D54B;
+        }
+
+        .input-display.subtract {
+            color: #FF453A;
+        }
+
+        /* Number Pad */
+        .numpad-container {
+            padding: 8px 16px calc(56px + env(safe-area-inset-bottom, 0px));
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .numpad-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .numpad-btn {
+            background: #2C2C2E;
+            border: none;
+            border-radius: 16px;
+            padding: 20px;
+            font-size: 30px;
+            font-weight: 600;
+            color: #FFFFFF;
+            cursor: pointer;
+            transition: all 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .numpad-btn:active {
+            background: #3A3A3C;
+            transform: scale(0.95);
+        }
+
+        .numpad-btn.reset-btn {
+            background: #3A3A3C;
+            font-size: 20px;
+            font-weight: 600;
+            color: #8E8E93;
+        }
+
+        .transaction-label-input {
+            background: #2C2C2E;
+            border: none;
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 15px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #FFFFFF;
+            width: 100%;
+            margin-bottom: 10px;
+            outline: none;
+            font-weight: 400;
+        }
+
+        .transaction-label-input::placeholder {
+            color: #8E8E93;
+        }
+
+        .transaction-label-input:focus {
+            background: #3A3A3C;
+        }
+
+        .history-label {
+            font-size: 15px;
+            color: #FFFFFF;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .numpad-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .action-btn {
+            background: #2C2C2E;
+            border: none;
+            border-radius: 16px;
+            padding: 18px;
+            font-size: 19px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .action-btn.subtract {
+            background: #FF453A;
+            color: #000000;
+        }
+
+        .action-btn.add {
+            background: #00D54B;
+            color: #000000;
+        }
+
+        .action-btn:active {
+            transform: scale(0.95);
+            opacity: 0.8;
+        }
+
+        /* Side Panels */
+        .side-panel {
+            position: fixed;
+            top: 0;
+            width: 320px;
+            height: 100vh;
+            background: #2C2C2E;
+            transition: all 0.3s ease;
+            z-index: 200;
+            padding: 80px 20px 20px;
+            overflow-y: auto;
+        }
+
+        .history-panel {
+            left: -100%;
+        }
+
+        .history-panel.active {
+            left: 0;
+        }
+
+        .reminder-panel {
+            right: -100%;
+        }
+
+        .reminder-panel.active {
+            right: 0;
+        }
+
+        .reminder-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 150;
+        }
+
+        .reminder-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .panel-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #FFFFFF;
+        }
+
+        .clear-history-btn {
+            background: none;
+            border: none;
+            color: #FF453A;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 8px;
+            transition: background 0.15s;
+        }
+
+        .clear-history-btn:active {
+            background: rgba(255, 69, 58, 0.15);
+        }
+
+        /* History Panel */
+        .history-item {
+            background: #1C1C1E;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .history-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .history-amount {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .history-amount.add {
+            color: #00D54B;
+        }
+
+        .history-amount.subtract {
+            color: #FF453A;
+        }
+
+        .history-date {
+            font-size: 13px;
+            color: #8E8E93;
+        }
+
+        .history-new-total {
+            font-size: 14px;
+            color: #8E8E93;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #3A3A3C;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8E8E93;
+            font-size: 14px;
+        }
+
+        /* --- Reminder Panel --- */
+        .snail-scene {
+            width: 100%;
+            height: 44px;
+            margin-bottom: -4px;
+            display: block;
+        }
+
+        .time-input-wrapper {
+            margin-bottom: 20px;
+        }
+
+        .time-label {
+            font-size: 13px;
+            color: #8E8E93;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        input[type="time"] {
+            width: 100%;
+            background: #1C1C1E;
+            color: #FFFFFF;
+            border: 1px solid #3A3A3C;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 18px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            outline: none;
+        }
+
+        input[type="time"]:focus {
+            border-color: #00D54B;
+        }
+
+        .days-label {
+            font-size: 13px;
+            color: #8E8E93;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .days-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .day-btn {
+            background: #1C1C1E;
+            border: 2px solid #3A3A3C;
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #8E8E93;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .day-btn.active {
+            background: #00D54B;
+            border-color: #00D54B;
+            color: #000000;
+        }
+
+        .day-btn:active {
+            transform: scale(0.95);
+        }
+
+        .reminder-status {
+            background: #1C1C1E;
+            border-radius: 12px;
+            padding: 14px;
+            text-align: center;
+            font-size: 13px;
+            color: #8E8E93;
+            line-height: 1.4;
+        }
+
+        .reminder-status.active {
+            color: #00D54B;
+        }
+
+        .test-notif-btn {
+            display: block;
+            width: 100%;
+            margin-top: 12px;
+            padding: 12px;
+            background: #2C2C2E;
+            border: none;
+            border-radius: 12px;
+            color: #8E8E93;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .test-notif-btn:active {
+            background: #3A3A3C;
+        }
+
+        /* --- Input display animations --- */
+        .input-display {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .input-display.fly-up {
+            animation: flyUpToBalance 0.25s ease-out forwards;
+        }
+
+        .input-display.slide-up-zero {
+            animation: slideUpZero 0.18s ease-out forwards;
+        }
+
+        @keyframes flyUpToBalance {
+            0%   { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-70px); }
+        }
+
+        @keyframes slideUpZero {
+            0%   { opacity: 0; transform: translateY(16px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Balance font color pulse --- */
+        @keyframes colorPulseGreen {
+            0%   { color: #FFFFFF; }
+            30%  { color: #00D54B; }
+            100% { color: #FFFFFF; }
+        }
+
+        @keyframes colorPulseRed {
+            0%   { color: #FFFFFF; }
+            30%  { color: #FF453A; }
+            100% { color: #FFFFFF; }
+        }
+
+        @keyframes colorPulseGreenFromNeg {
+            0%   { color: #FF453A; }
+            30%  { color: #00D54B; }
+            100% { color: #FF453A; }
+        }
+
+        @keyframes colorPulseRedFromNeg {
+            0%   { color: #FF453A; }
+            30%  { color: #ff6b62; }
+            100% { color: #FF453A; }
+        }
+
+        .balance-display.pulse-green {
+            animation: colorPulseGreen 0.5s ease-out;
+        }
+
+        .balance-display.pulse-red {
+            animation: colorPulseRed 0.5s ease-out;
+        }
+
+        .balance-display.negative.pulse-green {
+            animation: colorPulseGreenFromNeg 0.5s ease-out;
+        }
+
+        .balance-display.negative.pulse-red {
+            animation: colorPulseRedFromNeg 0.5s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <!-- History Icon (Left) -->
+    <button class="icon-button history-icon" id="historyIcon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
+        </svg>
+    </button>
+
+    <!-- Notification Bell Icon (Right) -->
+    <button class="icon-button bell-icon" id="bellIcon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+        </svg>
+    </button>
+
+    <!-- Overlay -->
+    <div class="reminder-overlay" id="overlay"></div>
+
+    <!-- History Panel (Left) -->
+    <div class="side-panel history-panel" id="historyPanel">
+        <div class="panel-header">
+            <div class="panel-title">History</div>
+            <button class="clear-history-btn" id="clearHistoryBtn">Clear</button>
+        </div>
+        <div id="historyContainer"></div>
+    </div>
+
+    <!-- Reminder Panel (Right) -->
+    <div class="side-panel reminder-panel" id="reminderPanel">
+        <div class="panel-title" style="margin-bottom: 24px;">Reminders</div>
+
+        <div class="time-input-wrapper">
+            <div class="time-label">Notification Time</div>
+            <!-- Snail scene SVG sitting on top of the input -->
+            <svg class="snail-scene" viewBox="0 0 280 44" xmlns="http://www.w3.org/2000/svg">
+                <!-- Left grass clump -->
+                <path d="M22 42 Q20 32 18 22" fill="none" stroke="#3A3A3C" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M25 42 Q25 34 24 24" fill="none" stroke="#3A3A3C" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M28 42 Q30 33 33 24" fill="none" stroke="#3A3A3C" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M20 42 Q16 35 12 28" fill="none" stroke="#3A3A3C" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M31 42 Q34 36 38 30" fill="none" stroke="#3A3A3C" stroke-width="1.4" stroke-linecap="round"/>
+                <!-- Small grass tuft -->
+                <path d="M65 42 Q63 36 60 30" fill="none" stroke="#3A3A3C" stroke-width="1.4" stroke-linecap="round"/>
+                <path d="M67 42 Q67 35 67 28" fill="none" stroke="#3A3A3C" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M69 42 Q71 36 74 30" fill="none" stroke="#3A3A3C" stroke-width="1.4" stroke-linecap="round"/>
+                <!-- Snail - solid silhouette style -->
+                <!-- Shell: big friendly dome -->
+                <path d="M125 42 Q125 18 148 16 Q172 18 172 42" fill="#3A3A3C"/>
+                <!-- Body: flat foot extending right -->
+                <path d="M120 42 Q120 37 130 36 L185 36 Q190 36 190 39 Q190 42 185 42 Z" fill="#3A3A3C"/>
+                <!-- Head bump -->
+                <ellipse cx="185" cy="34" rx="6" ry="5" fill="#3A3A3C"/>
+                <!-- Antennae -->
+                <line x1="186" y1="30" x2="192" y2="20" stroke="#3A3A3C" stroke-width="1.8" stroke-linecap="round"/>
+                <circle cx="192" cy="19" r="2.2" fill="#3A3A3C"/>
+                <line x1="183" y1="30" x2="188" y2="21" stroke="#3A3A3C" stroke-width="1.8" stroke-linecap="round"/>
+                <circle cx="188" cy="20" r="2.2" fill="#3A3A3C"/>
+                <!-- Friendly smile -->
+                <path d="M183 37 Q186 40 189 37" fill="none" stroke="#2C2C2E" stroke-width="1" stroke-linecap="round"/>
+                <!-- Right grass clump -->
+                <path d="M220 42 Q218 34 214 24" fill="none" stroke="#3A3A3C" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M223 42 Q223 33 222 22" fill="none" stroke="#3A3A3C" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M226 42 Q228 34 232 24" fill="none" stroke="#3A3A3C" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M218 42 Q214 36 210 30" fill="none" stroke="#3A3A3C" stroke-width="1.4" stroke-linecap="round"/>
+                <path d="M229 42 Q233 35 237 28" fill="none" stroke="#3A3A3C" stroke-width="1.5" stroke-linecap="round"/>
+                <!-- Small far-right tuft -->
+                <path d="M260 42 Q258 36 256 30" fill="none" stroke="#3A3A3C" stroke-width="1.3" stroke-linecap="round"/>
+                <path d="M263 42 Q263 35 263 28" fill="none" stroke="#3A3A3C" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M266 42 Q268 36 271 31" fill="none" stroke="#3A3A3C" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+            <input type="time" id="timeInput" value="07:00">
+        </div>
+
+        <div class="days-label">Remind me on</div>
+        <div class="days-grid">
+            <button class="day-btn" data-day="1">Monday</button>
+            <button class="day-btn" data-day="2">Tuesday</button>
+            <button class="day-btn" data-day="3">Wednesday</button>
+            <button class="day-btn" data-day="4">Thursday</button>
+            <button class="day-btn" data-day="5">Friday</button>
+            <button class="day-btn" data-day="6">Saturday</button>
+            <button class="day-btn" data-day="0">Sunday</button>
+        </div>
+
+        <div class="reminder-status" id="reminderStatus">No reminders set</div>
+        <button class="test-notif-btn" id="testNotifBtn">Send Test Notification</button>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="balance-label">Spending Money</div>
+        <div class="balance-display" id="balanceDisplay"><span id="balance">$0</span></div>
+        <div class="input-display" id="inputDisplay"></div>
+    </div>
+
+    <!-- Number Pad -->
+    <div class="numpad-container">
+        <input type="text" class="transaction-label-input" id="labelInput" placeholder="What's this for?" maxlength="30">
+
+        <div class="numpad-actions">
+            <button class="action-btn subtract" id="subtractBtn">
+                <span style="font-size: 32px;">−</span> Spend
+            </button>
+            <button class="action-btn add" id="addBtn">
+                <span style="font-size: 32px;">+</span> Add
+            </button>
+        </div>
+
+        <div class="numpad-grid">
+            <button class="numpad-btn" data-num="1">1</button>
+            <button class="numpad-btn" data-num="2">2</button>
+            <button class="numpad-btn" data-num="3">3</button>
+            <button class="numpad-btn" data-num="4">4</button>
+            <button class="numpad-btn" data-num="5">5</button>
+            <button class="numpad-btn" data-num="6">6</button>
+            <button class="numpad-btn" data-num="7">7</button>
+            <button class="numpad-btn" data-num="8">8</button>
+            <button class="numpad-btn" data-num="9">9</button>
+            <button class="numpad-btn reset-btn" id="resetBtn" data-num="reset">C</button>
+            <button class="numpad-btn" data-num="0">0</button>
+            <button class="numpad-btn" data-num="back">←</button>
+        </div>
+    </div>
+
+    <script>
+        // Data
+        const data = {
+            balance: 0,
+            transactions: [],
+            reminders: {
+                time: '07:00',
+                days: []
+            }
+        };
+
+        let currentInput = '';
+        let currentLabel = '';
+        let currentMode = null;
+        let notificationTimer = null;
+
+        // Load data
+        function loadData() {
+            const saved = localStorage.getItem('cashTrackerData');
+            if (saved) {
+                Object.assign(data, JSON.parse(saved));
+            }
+            updateUI();
+        }
+
+        // Save data
+        function saveData() {
+            localStorage.setItem('cashTrackerData', JSON.stringify(data));
+        }
+
+        // Update UI
+        function updateUI() {
+            const balanceEl = document.getElementById('balance');
+            const balanceDisplay = document.getElementById('balanceDisplay');
+
+            // Whole dollars only
+            const rounded = Math.round(data.balance);
+            if (rounded < 0) {
+                balanceEl.textContent = '-$' + Math.abs(rounded);
+                balanceDisplay.classList.add('negative');
+            } else {
+                balanceEl.textContent = '$' + rounded;
+                balanceDisplay.classList.remove('negative');
+            }
+
+            renderHistory();
+            updateReminderUI();
+        }
+
+        // Update input display
+        function updateInputDisplay() {
+            const display = document.getElementById('inputDisplay');
+            display.classList.remove('add', 'subtract');
+
+            if (currentMode === 'add') {
+                display.classList.add('add');
+                display.textContent = '+$' + (currentInput || '0');
+            } else if (currentMode === 'subtract') {
+                display.classList.add('subtract');
+                display.textContent = '-$' + (currentInput || '0');
+            } else {
+                display.textContent = '$' + (currentInput || '0');
+            }
+        }
+
+        // Number pad input
+        document.querySelectorAll('.numpad-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const num = btn.dataset.num;
+                if (num === 'reset' || num === 'back') return; // handled separately
+
+                if (currentInput.length < 10) {
+                    currentInput += num;
+                }
+                updateInputDisplay();
+            });
+        });
+
+        // Backspace
+        document.querySelector('[data-num="back"]').addEventListener('click', () => {
+            currentInput = currentInput.slice(0, -1);
+            updateInputDisplay();
+        });
+
+        // Reset button (where decimal was)
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            if (confirm('Reset balance to $0?')) {
+                const resetAmount = Math.abs(data.balance);
+                const resetType = data.balance >= 0 ? 'subtract' : 'add';
+                data.balance = 0;
+                if (resetAmount > 0) {
+                    data.transactions.unshift({
+                        type: resetType,
+                        amount: resetAmount,
+                        date: new Date().toISOString(),
+                        label: 'Reset to $0'
+                    });
+                }
+                currentMode = null;
+                currentInput = '';
+                saveData();
+                updateUI();
+                updateInputDisplay();
+            }
+        });
+
+        // Label input
+        document.getElementById('labelInput').addEventListener('input', (e) => {
+            currentLabel = e.target.value;
+        });
+
+        // Commit a transaction
+        function commitTransaction(type) {
+            const amount = parseFloat(currentInput);
+            const inputDisplay = document.getElementById('inputDisplay');
+            const balanceDisplay = document.getElementById('balanceDisplay');
+
+            // Fly-up animation
+            inputDisplay.classList.remove('fly-up', 'slide-up-zero');
+            void inputDisplay.offsetWidth;
+            inputDisplay.classList.add('fly-up');
+
+            // Balance font color pulse
+            const pulseClass = type === 'add' ? 'pulse-green' : 'pulse-red';
+            balanceDisplay.classList.remove('pulse-green', 'pulse-red');
+            void balanceDisplay.offsetWidth;
+            balanceDisplay.classList.add(pulseClass);
+            balanceDisplay.addEventListener('animationend', () => {
+                balanceDisplay.classList.remove(pulseClass);
+            }, { once: true });
+
+            // Haptic
+            if (navigator.vibrate) navigator.vibrate(40);
+
+            // Update data INSTANTLY
+            if (type === 'add') {
+                data.balance += amount;
+            } else {
+                data.balance -= Math.abs(amount);
+            }
+            data.transactions.unshift({
+                type: type,
+                amount: amount,
+                date: new Date().toISOString(),
+                label: currentLabel || ''
+            });
+
+            currentInput = '';
+            currentLabel = '';
+            currentMode = null;
+            document.getElementById('labelInput').value = '';
+            saveData();
+            updateUI();
+
+            // After fly-up, slide in new $0
+            inputDisplay.addEventListener('animationend', () => {
+                inputDisplay.classList.remove('fly-up');
+                updateInputDisplay();
+                void inputDisplay.offsetWidth;
+                inputDisplay.classList.add('slide-up-zero');
+                inputDisplay.addEventListener('animationend', () => {
+                    inputDisplay.classList.remove('slide-up-zero');
+                }, { once: true });
+            }, { once: true });
+        }
+
+        // Add money
+        document.getElementById('addBtn').addEventListener('click', () => {
+            const hasValidInput = currentInput && parseFloat(currentInput) > 0;
+            if ((currentMode === 'add' || currentMode === null) && hasValidInput) {
+                commitTransaction('add');
+            } else {
+                currentMode = 'add';
+                updateInputDisplay();
+            }
+        });
+
+        // Subtract money
+        document.getElementById('subtractBtn').addEventListener('click', () => {
+            const hasValidInput = currentInput && parseFloat(currentInput) > 0;
+            if ((currentMode === 'subtract' || currentMode === null) && hasValidInput) {
+                commitTransaction('subtract');
+            } else {
+                currentMode = 'subtract';
+                updateInputDisplay();
+            }
+        });
+
+        // Format date
+        function formatDate(date) {
+            const d = new Date(date);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            if (d.toDateString() === today.toDateString()) {
+                return 'Today at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            } else if (d.toDateString() === yesterday.toDateString()) {
+                return 'Yesterday at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            }
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+                   ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        }
+
+        // Render history
+        function renderHistory() {
+            const container = document.getElementById('historyContainer');
+            if (data.transactions.length === 0) {
+                container.innerHTML = '<div class="empty-state">No history yet</div>';
+                return;
+            }
+            container.innerHTML = data.transactions.map((t, index) => {
+                let runningBalance = data.balance;
+                for (let i = 0; i < index; i++) {
+                    const prevTx = data.transactions[i];
+                    if (prevTx.type === 'add') runningBalance -= prevTx.amount;
+                    else runningBalance += prevTx.amount;
+                }
+                const rounded = Math.round(runningBalance);
+                const totalStr = rounded < 0 ? '-$' + Math.abs(rounded) : '$' + rounded;
+                return `
+                    <div class="history-item">
+                        <div class="history-item-header">
+                            <div class="history-amount ${t.type}">
+                                ${t.type === 'add' ? '+' : '−'}$${Math.round(t.amount)}
+                            </div>
+                            <div>
+                                ${t.label ? `<div class="history-label">${t.label}</div>` : ''}
+                                <div class="history-date">${formatDate(t.date)}</div>
+                            </div>
+                        </div>
+                        <div class="history-new-total">New Total: ${totalStr}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Clear history
+        document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+            if (data.transactions.length === 0) return;
+            if (confirm('Clear all transaction history?')) {
+                data.transactions = [];
+                saveData();
+                renderHistory();
+            }
+        });
+
+        // ========== PANELS ==========
+
+        // Toggle history panel (left)
+        document.getElementById('historyIcon').addEventListener('click', () => {
+            const hp = document.getElementById('historyPanel');
+            const rp = document.getElementById('reminderPanel');
+            const ov = document.getElementById('overlay');
+            if (hp.classList.contains('active')) {
+                hp.classList.remove('active');
+                ov.classList.remove('active');
+            } else {
+                hp.classList.add('active');
+                rp.classList.remove('active');
+                ov.classList.add('active');
+            }
+        });
+
+        // Toggle reminder panel (right)
+        document.getElementById('bellIcon').addEventListener('click', () => {
+            const hp = document.getElementById('historyPanel');
+            const rp = document.getElementById('reminderPanel');
+            const ov = document.getElementById('overlay');
+            if (rp.classList.contains('active')) {
+                rp.classList.remove('active');
+                ov.classList.remove('active');
+            } else {
+                rp.classList.add('active');
+                hp.classList.remove('active');
+                ov.classList.add('active');
+            }
+        });
+
+        // Close panels via overlay
+        document.getElementById('overlay').addEventListener('click', () => {
+            document.getElementById('historyPanel').classList.remove('active');
+            document.getElementById('reminderPanel').classList.remove('active');
+            document.getElementById('overlay').classList.remove('active');
+        });
+
+        // ========== REMINDERS ==========
+
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        // Time input change
+        document.getElementById('timeInput').addEventListener('change', (e) => {
+            data.reminders.time = e.target.value;
+            saveData();
+            scheduleNotification();
+            updateReminderUI();
+        });
+
+        // Day button toggles
+        document.querySelectorAll('.day-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const day = parseInt(btn.dataset.day);
+                const idx = data.reminders.days.indexOf(day);
+                if (idx >= 0) {
+                    data.reminders.days.splice(idx, 1);
+                    btn.classList.remove('active');
+                } else {
+                    // Request permission on first day selection (user gesture)
+                    if (data.reminders.days.length === 0) {
+                        await requestNotificationPermission();
+                    }
+                    data.reminders.days.push(day);
+                    btn.classList.add('active');
+                }
+                saveData();
+                scheduleNotification();
+                updateReminderUI();
+            });
+        });
+
+        // Update reminder UI state
+        function updateReminderUI() {
+            // Time input
+            document.getElementById('timeInput').value = data.reminders.time;
+
+            // Day buttons
+            document.querySelectorAll('.day-btn').forEach(btn => {
+                const day = parseInt(btn.dataset.day);
+                if (data.reminders.days.includes(day)) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
+            // Bell icon active state
+            const bellIcon = document.getElementById('bellIcon');
+            if (data.reminders.days.length > 0) {
+                bellIcon.classList.add('active');
+            } else {
+                bellIcon.classList.remove('active');
+            }
+
+            // Status text
+            const status = document.getElementById('reminderStatus');
+            if (data.reminders.days.length === 0) {
+                status.textContent = 'No reminders set';
+                status.classList.remove('active');
+            } else {
+                const sortedDays = [...data.reminders.days].sort();
+                const names = sortedDays.map(d => dayNames[d].slice(0, 3));
+                // Format time for display
+                const [h, m] = data.reminders.time.split(':');
+                const hour = parseInt(h);
+                const ampm = hour >= 12 ? 'PM' : 'AM';
+                const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                const timeStr = hour12 + ':' + m + ' ' + ampm;
+                status.textContent = names.join(', ') + ' at ' + timeStr;
+                status.classList.add('active');
+            }
+        }
+
+        // ========== NOTIFICATION SCHEDULING ==========
+
+        async function requestNotificationPermission() {
+            if (!('Notification' in window)) return false;
+            if (Notification.permission === 'granted') return true;
+            if (Notification.permission === 'denied') return false;
+            const result = await Notification.requestPermission();
+            return result === 'granted';
+        }
+
+        async function showNotification(bodyText) {
+            // Try service worker notification first (works on Android PWA)
+            if ('serviceWorker' in navigator) {
+                try {
+                    const reg = await navigator.serviceWorker.ready;
+                    await reg.showNotification('Weekly Expenses', {
+                        body: bodyText,
+                        icon: 'icon-192.png',
+                        tag: 'balance-reminder',
+                        renotify: true
+                    });
+                    return true;
+                } catch (e) {
+                    // Fall back to basic Notification
+                }
+            }
+            // Fallback for desktop
+            try {
+                new Notification('Weekly Expenses', {
+                    body: bodyText,
+                    icon: 'icon-192.png',
+                    tag: 'balance-reminder',
+                    renotify: true
+                });
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function getBalanceString() {
+            const rounded = Math.round(data.balance);
+            return rounded < 0 ? '-$' + Math.abs(rounded) : '$' + rounded;
+        }
+
+        function scheduleNotification() {
+            // Clear existing timer
+            if (notificationTimer) {
+                clearTimeout(notificationTimer);
+                notificationTimer = null;
+            }
+
+            if (data.reminders.days.length === 0) return;
+
+            // Find the next matching day+time
+            const now = new Date();
+            const [hours, minutes] = data.reminders.time.split(':').map(Number);
+
+            let nearest = null;
+            for (let offset = 0; offset < 8; offset++) {
+                const candidate = new Date(now);
+                candidate.setDate(candidate.getDate() + offset);
+                candidate.setHours(hours, minutes, 0, 0);
+
+                if (candidate <= now) continue;
+
+                if (data.reminders.days.includes(candidate.getDay())) {
+                    nearest = candidate;
+                    break;
+                }
+            }
+
+            if (!nearest) return;
+
+            const msUntil = nearest.getTime() - Date.now();
+
+            if (msUntil > 0 && msUntil < 7 * 24 * 60 * 60 * 1000) {
+                notificationTimer = setTimeout(async () => {
+                    if (Notification.permission === 'granted') {
+                        await showNotification('Balance: ' + getBalanceString());
+                    }
+                    scheduleNotification();
+                }, msUntil);
+            }
+        }
+
+        // Test notification button
+        document.getElementById('testNotifBtn').addEventListener('click', async () => {
+            const granted = await requestNotificationPermission();
+            if (granted) {
+                const sent = await showNotification('Test! Balance: ' + getBalanceString());
+                if (sent) {
+                    document.getElementById('testNotifBtn').textContent = '✓ Notification sent!';
+                    setTimeout(() => {
+                        document.getElementById('testNotifBtn').textContent = 'Send Test Notification';
+                    }, 2000);
+                }
+            } else {
+                document.getElementById('testNotifBtn').textContent = 'Notifications blocked — check settings';
+                setTimeout(() => {
+                    document.getElementById('testNotifBtn').textContent = 'Send Test Notification';
+                }, 3000);
+            }
+        });
+
+        // ========== INIT ==========
+        loadData();
+        updateInputDisplay();
+        updateReminderUI();
+        scheduleNotification();
+    </script>
+</body>
+</html>
