@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#1C1C1E">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>Cash</title>
+    <link rel="manifest" href="spending-manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js');
+        }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1C1C1E;
+            color: #FFFFFF;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            overflow-y: auto;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Icons */
+        .icon-button {
+            position: fixed;
+            top: 20px;
+            width: 40px;
+            height: 40px;
+            background: #2C2C2E;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 300;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .icon-button:active {
+            transform: scale(0.9);
+        }
+
+        .icon-button svg {
+            width: 24px;
+            height: 24px;
+            fill: #8E8E93;
+        }
+
+        .icon-button.active svg {
+            fill: #00D54B;
+        }
+
+        .history-icon {
+            left: 20px;
+        }
+
+        .bell-icon {
+            right: 20px;
+        }
+
+        /* Header */
+        .header {
+            padding: 80px 24px 20px;
+            text-align: center;
+        }
+
+        .balance-label {
+            font-size: 14px;
+            color: #8E8E93;
+            margin-bottom: 8px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .balance-display {
+            font-size: 72px;
+            font-weight: 700;
+            letter-spacing: -3px;
+            color: #FFFFFF;
+            margin-bottom: 8px;
+            min-height: 90px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.3s ease;
+        }
+
+        .balance-display.negative {
+            color: #FF453A;
+        }
+
+        .input-display {
+            font-size: 56px;
+            color: #FFFFFF;
+            min-height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .input-display.add {
+            color: #00D54B;
+        }
+
+        .input-display.subtract {
+            color: #FF453A;
+        }
+
+        /* Number Pad */
+        .numpad-container {
+            padding: 20px 20px calc(140px + env(safe-area-inset-bottom, 0px));
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .numpad-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .numpad-btn {
+            background: #2C2C2E;
+            border: none;
+            border-radius: 16px;
+            padding: 24px;
+            font-size: 32px;
+            font-weight: 600;
+            color: #FFFFFF;
+            cursor: pointer;
+            transition: all 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .numpad-btn:active {
+            background: #3A3A3C;
+            transform: scale(0.95);
+        }
+
+        .transaction-label-input {
+            background: #2C2C2E;
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 16px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #FFFFFF;
+            width: 100%;
+            margin-bottom: 12px;
+            outline: none;
+            font-weight: 400;
+        }
+
+        .transaction-label-input::placeholder {
+            color: #8E8E93;
+        }
+
+        .transaction-label-input:focus {
+            background: #3A3A3C;
+        }
+
+        .history-label {
+            font-size: 15px;
+            color: #FFFFFF;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .numpad-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .action-btn {
+            background: #2C2C2E;
+            border: none;
+            border-radius: 16px;
+            padding: 22px;
+            font-size: 20px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .action-btn.subtract {
+            background: #FF453A;
+            color: #000000;
+        }
+
+        .action-btn.add {
+            background: #00D54B;
+            color: #000000;
+        }
+
+        .action-btn:active {
+            transform: scale(0.95);
+            opacity: 0.8;
+        }
+
+        /* Side Panels */
+        .side-panel {
+            position: fixed;
+            top: 0;
+            width: 320px;
+            height: 100vh;
+            background: #2C2C2E;
+            transition: all 0.3s ease;
+            z-index: 200;
+            padding: 80px 20px 20px;
+            overflow-y: auto;
+        }
+
+        .history-panel {
+            left: -100%;
+        }
+
+        .history-panel.active {
+            left: 0;
+        }
+
+        .reminder-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 150;
+        }
+
+        .reminder-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .panel-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            color: #FFFFFF;
+        }
+
+        /* History Panel */
+        .history-item {
+            background: #1C1C1E;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .history-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .history-amount {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .history-amount.add {
+            color: #00D54B;
+        }
+
+        .history-amount.subtract {
+            color: #FF453A;
+        }
+
+        .history-date {
+            font-size: 13px;
+            color: #8E8E93;
+        }
+
+        .history-new-total {
+            font-size: 14px;
+            color: #8E8E93;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #3A3A3C;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8E8E93;
+            font-size: 14px;
+        }
+
+        /* --- Input display: fade out old amount, slide up new $0 --- */
+        .input-display {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .input-display.fly-up {
+            animation: flyUpToBalance 0.4s ease-in forwards;
+        }
+
+        .input-display.slide-up-zero {
+            animation: slideUpZero 0.35s ease-out forwards;
+        }
+
+        @keyframes flyUpToBalance {
+            0%   { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-70px); }
+        }
+
+        @keyframes slideUpZero {
+            0%   { opacity: 0; transform: translateY(16px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Balance font color pulse (friendly) --- */
+        @keyframes colorPulseGreen {
+            0%   { color: #FFFFFF; }
+            30%  { color: #00D54B; }
+            100% { color: #FFFFFF; }
+        }
+
+        @keyframes colorPulseRed {
+            0%   { color: #FFFFFF; }
+            30%  { color: #FF453A; }
+            100% { color: #FFFFFF; }
+        }
+
+        /* When negative, pulse red but return to the negative red */
+        @keyframes colorPulseGreenFromNeg {
+            0%   { color: #FF453A; }
+            30%  { color: #00D54B; }
+            100% { color: #FF453A; }
+        }
+
+        @keyframes colorPulseRedFromNeg {
+            0%   { color: #FF453A; }
+            30%  { color: #ff6b62; }
+            100% { color: #FF453A; }
+        }
+
+        .balance-display.pulse-green {
+            animation: colorPulseGreen 0.5s ease-out;
+        }
+
+        .balance-display.pulse-red {
+            animation: colorPulseRed 0.5s ease-out;
+        }
+
+        .balance-display.negative.pulse-green {
+            animation: colorPulseGreenFromNeg 0.5s ease-out;
+        }
+
+        .balance-display.negative.pulse-red {
+            animation: colorPulseRedFromNeg 0.5s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <!-- History Icon (Left) -->
+    <button class="icon-button history-icon" id="historyIcon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
+        </svg>
+    </button>
+
+    <!-- Reset Icon (Right) -->
+    <button class="icon-button bell-icon" id="resetIconBtn">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+        </svg>
+    </button>
+
+    <!-- Overlay -->
+    <div class="reminder-overlay" id="overlay"></div>
+
+    <!-- History Panel (Left) -->
+    <div class="side-panel history-panel" id="historyPanel">
+        <div class="panel-title">History</div>
+        <div id="historyContainer"></div>
+    </div>
+
+
+    <!-- Header -->
+    <div class="header">
+        <div class="balance-label">Spending Money</div>
+        <div class="balance-display" id="balanceDisplay"><span id="balance">$0.00</span></div>
+        <div class="input-display" id="inputDisplay"></div>
+    </div>
+
+    <!-- Number Pad -->
+    <div class="numpad-container">
+        <input type="text" class="transaction-label-input" id="labelInput" placeholder="What's this for?" maxlength="30">
+
+        <div class="numpad-actions">
+            <button class="action-btn subtract" id="subtractBtn">
+                <span style="font-size: 32px;">−</span> Spend
+            </button>
+            <button class="action-btn add" id="addBtn">
+                <span style="font-size: 32px;">+</span> Add
+            </button>
+        </div>
+
+        <div class="numpad-grid">
+            <button class="numpad-btn" data-num="1">1</button>
+            <button class="numpad-btn" data-num="2">2</button>
+            <button class="numpad-btn" data-num="3">3</button>
+            <button class="numpad-btn" data-num="4">4</button>
+            <button class="numpad-btn" data-num="5">5</button>
+            <button class="numpad-btn" data-num="6">6</button>
+            <button class="numpad-btn" data-num="7">7</button>
+            <button class="numpad-btn" data-num="8">8</button>
+            <button class="numpad-btn" data-num="9">9</button>
+            <button class="numpad-btn" data-num=".">.</button>
+            <button class="numpad-btn" data-num="0">0</button>
+            <button class="numpad-btn" data-num="back">←</button>
+        </div>
+    </div>
+
+    <script>
+        // Data
+        const data = {
+            balance: 0,
+            transactions: [],
+            reminders: {
+                time: '07:00',
+                days: []
+            }
+        };
+
+        let currentInput = '';
+        let currentLabel = '';
+        let currentMode = null; // 'add' or 'subtract'
+
+        // Load data
+        function loadData() {
+            const saved = localStorage.getItem('cashTrackerData');
+            if (saved) {
+                Object.assign(data, JSON.parse(saved));
+            }
+            updateUI();
+        }
+
+        // Save data
+        function saveData() {
+            localStorage.setItem('cashTrackerData', JSON.stringify(data));
+        }
+
+        // Update UI
+        function updateUI() {
+            const balanceEl = document.getElementById('balance');
+            const balanceDisplay = document.getElementById('balanceDisplay');
+
+            if (data.balance < 0) {
+                balanceEl.textContent = '-$' + Math.abs(data.balance).toFixed(2);
+                balanceDisplay.classList.add('negative');
+            } else {
+                balanceEl.textContent = '$' + data.balance.toFixed(2);
+                balanceDisplay.classList.remove('negative');
+            }
+
+            renderHistory();
+        }
+
+        // Update input display
+        function updateInputDisplay() {
+            const display = document.getElementById('inputDisplay');
+
+            // Remove all classes
+            display.classList.remove('add', 'subtract');
+
+            if (currentMode === 'add') {
+                display.classList.add('add');
+                display.textContent = '+$' + (currentInput || '0');
+            } else if (currentMode === 'subtract') {
+                display.classList.add('subtract');
+                display.textContent = '-$' + (currentInput || '0');
+            } else {
+                // No mode selected yet — show typed digits or $0
+                display.textContent = '$' + (currentInput || '0');
+            }
+        }
+
+        // Number pad input
+        document.querySelectorAll('.numpad-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const num = btn.dataset.num;
+
+                if (num === 'back') {
+                    currentInput = currentInput.slice(0, -1);
+                } else if (num === '.') {
+                    if (!currentInput.includes('.')) {
+                        currentInput += num;
+                    }
+                } else {
+                    if (currentInput.length < 10) {
+                        currentInput += num;
+                    }
+                }
+
+                updateInputDisplay();
+            });
+        });
+
+
+        // Label input
+        document.getElementById('labelInput').addEventListener('input', (e) => {
+            currentLabel = e.target.value;
+        });
+
+        // Commit a transaction (shared logic)
+        function commitTransaction(type) {
+            const amount = parseFloat(currentInput);
+            const inputDisplay = document.getElementById('inputDisplay');
+            const balanceDisplay = document.getElementById('balanceDisplay');
+
+            // --- 1. Amount travels up toward the balance and fades ---
+            inputDisplay.classList.remove('fly-up', 'slide-up-zero');
+            void inputDisplay.offsetWidth; // force reflow
+            inputDisplay.classList.add('fly-up');
+
+            // --- 2. Balance font color pulse ---
+            const pulseClass = type === 'add' ? 'pulse-green' : 'pulse-red';
+            balanceDisplay.classList.remove('pulse-green', 'pulse-red');
+            void balanceDisplay.offsetWidth;
+            balanceDisplay.classList.add(pulseClass);
+            balanceDisplay.addEventListener('animationend', () => {
+                balanceDisplay.classList.remove(pulseClass);
+            }, { once: true });
+
+            // --- 3. Haptic feedback (mobile) ---
+            if (navigator.vibrate) navigator.vibrate(40);
+
+            // --- 4. After fly-up, update data + slide in new $0 ---
+            inputDisplay.addEventListener('animationend', () => {
+                inputDisplay.classList.remove('fly-up');
+
+                // Update data
+                if (type === 'add') {
+                    data.balance += amount;
+                } else {
+                    data.balance -= Math.abs(amount);
+                }
+                data.transactions.unshift({
+                    type: type,
+                    amount: amount,
+                    date: new Date().toISOString(),
+                    label: currentLabel || ''
+                });
+
+                currentInput = '';
+                currentLabel = '';
+                currentMode = null;
+                document.getElementById('labelInput').value = '';
+                saveData();
+                updateUI();
+                updateInputDisplay();
+
+                // Slide the new $0 up from below
+                void inputDisplay.offsetWidth;
+                inputDisplay.classList.add('slide-up-zero');
+                inputDisplay.addEventListener('animationend', () => {
+                    inputDisplay.classList.remove('slide-up-zero');
+                }, { once: true });
+            }, { once: true });
+        }
+
+        // Add money
+        document.getElementById('addBtn').addEventListener('click', () => {
+            const hasValidInput = currentInput && parseFloat(currentInput) > 0;
+
+            if (currentMode === 'add' && hasValidInput) {
+                // Mode was already add and we have a number — commit
+                commitTransaction('add');
+            } else if (currentMode === null && hasValidInput) {
+                // User typed numbers first, then pressed Add — commit directly
+                commitTransaction('add');
+            } else {
+                // No valid input yet — set/switch mode to add (keeps any typed digits)
+                currentMode = 'add';
+                updateInputDisplay();
+            }
+        });
+
+        // Subtract money
+        document.getElementById('subtractBtn').addEventListener('click', () => {
+            const hasValidInput = currentInput && parseFloat(currentInput) > 0;
+
+            if (currentMode === 'subtract' && hasValidInput) {
+                // Mode was already subtract and we have a number — commit
+                commitTransaction('subtract');
+            } else if (currentMode === null && hasValidInput) {
+                // User typed numbers first, then pressed Spend — commit directly
+                commitTransaction('subtract');
+            } else {
+                // No valid input yet — set/switch mode to subtract (keeps any typed digits)
+                currentMode = 'subtract';
+                updateInputDisplay();
+            }
+        });
+
+        // Reset balance (from icon button)
+        document.getElementById('resetIconBtn').addEventListener('click', () => {
+            if (confirm('Reset balance to $0.00?')) {
+                const resetAmount = Math.abs(data.balance);
+                const resetType = data.balance >= 0 ? 'subtract' : 'add';
+                data.balance = 0;
+                data.transactions.unshift({
+                    type: resetType,
+                    amount: resetAmount,
+                    date: new Date().toISOString(),
+                    label: 'Reset to $0'
+                });
+                currentMode = null;
+                currentInput = '';
+                saveData();
+                updateUI();
+                updateInputDisplay();
+            }
+        });
+
+        // Format date
+        function formatDate(date) {
+            const d = new Date(date);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            if (d.toDateString() === today.toDateString()) {
+                return 'Today at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            } else if (d.toDateString() === yesterday.toDateString()) {
+                return 'Yesterday at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            }
+
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+                   ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        }
+
+        // Render history
+        function renderHistory() {
+            const container = document.getElementById('historyContainer');
+
+            if (data.transactions.length === 0) {
+                container.innerHTML = '<div class="empty-state">No history yet</div>';
+                return;
+            }
+
+            container.innerHTML = data.transactions.map((t, index) => {
+                // Calculate what the balance was before this transaction
+                let runningBalance = data.balance;
+                for (let i = 0; i < index; i++) {
+                    const prevTx = data.transactions[i];
+                    if (prevTx.type === 'add') {
+                        runningBalance -= prevTx.amount;
+                    } else {
+                        runningBalance += prevTx.amount;
+                    }
+                }
+
+                return `
+                    <div class="history-item">
+                        <div class="history-item-header">
+                            <div class="history-amount ${t.type}">
+                                ${t.type === 'add' ? '+' : '−'}$${t.amount.toFixed(2)}
+                            </div>
+                            <div>
+                                ${t.label ? `<div class="history-label">${t.label}</div>` : ''}
+                                <div class="history-date">${formatDate(t.date)}</div>
+                            </div>
+                        </div>
+                        <div class="history-new-total">New Total: $${runningBalance.toFixed(2)}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Toggle history panel
+        document.getElementById('historyIcon').addEventListener('click', () => {
+            const historyPanel = document.getElementById('historyPanel');
+            const overlay = document.getElementById('overlay');
+
+            if (historyPanel.classList.contains('active')) {
+                // Close if already open
+                historyPanel.classList.remove('active');
+                overlay.classList.remove('active');
+            } else {
+                // Open history panel
+                historyPanel.classList.add('active');
+                overlay.classList.add('active');
+            }
+        });
+
+
+        // Close panels
+        document.getElementById('overlay').addEventListener('click', () => {
+            document.getElementById('historyPanel').classList.remove('active');
+            document.getElementById('overlay').classList.remove('active');
+        });
+
+        // Initialize
+        loadData();
+        updateInputDisplay();
+    </script>
+</body>
+</html>
