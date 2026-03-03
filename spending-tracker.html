@@ -346,6 +346,15 @@
             margin-top: 8px;
             padding-top: 8px;
             border-top: 1px solid #3A3A3C;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-name {
+            font-size: 12px;
+            color: #636366;
+            font-weight: 500;
         }
 
         .empty-state {
@@ -552,6 +561,81 @@
             background: #FF9F0A;
         }
 
+        /* --- Sync Settings Panel --- */
+        .sync-settings-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 400;
+        }
+
+        .sync-settings {
+            position: absolute;
+            top: 75px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2C2C2E;
+            border-radius: 14px;
+            padding: 18px;
+            width: 260px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        }
+
+        .sync-settings-row {
+            margin-bottom: 12px;
+        }
+
+        .sync-settings-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .sync-settings-label {
+            font-size: 11px;
+            color: #8E8E93;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .sync-settings-value {
+            font-size: 14px;
+            color: #FFF;
+            font-weight: 500;
+            padding: 4px 0;
+        }
+
+        .sync-settings input {
+            width: 100%;
+            padding: 8px 10px;
+            background: #1C1C1E;
+            border: 1px solid #3A3A3C;
+            border-radius: 8px;
+            color: #FFF;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .sync-settings input:focus {
+            border-color: #00D54B;
+        }
+
+        .sync-settings-save {
+            width: 100%;
+            padding: 10px;
+            background: #00D54B;
+            border: none;
+            border-radius: 10px;
+            color: #000;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 12px;
+        }
+
+        .sync-settings-save:active {
+            opacity: 0.8;
+        }
+
         /* --- Input display animations --- */
         .input-display {
             position: relative;
@@ -710,9 +794,29 @@
     <div class="sync-modal-overlay" id="syncModal">
         <div class="sync-modal">
             <h3>Shared Tracker</h3>
-            <p>Enter a shared code so both phones see the same balance. Use the same code on each device.</p>
-            <input type="text" id="roomCodeInput" placeholder="e.g. snailmoney2024" autocomplete="off" spellcheck="false">
+            <p>Enter your name and a shared code. Both phones must use the same code.</p>
+            <input type="text" id="nameInput" placeholder="Your name (e.g. Gi)" autocomplete="off" spellcheck="false" maxlength="15">
+            <input type="text" id="roomCodeInput" placeholder="Shared code (e.g. snailmoney2024)" autocomplete="off" spellcheck="false">
             <button id="syncConnectBtn">Connect</button>
+        </div>
+    </div>
+
+    <!-- Sync Settings Panel -->
+    <div class="sync-settings-overlay" id="syncSettingsOverlay">
+        <div class="sync-settings" id="syncSettingsPanel">
+            <div class="sync-settings-row">
+                <div class="sync-settings-label">Room Code</div>
+                <div class="sync-settings-value" id="syncCurrentCode">—</div>
+            </div>
+            <div class="sync-settings-row">
+                <div class="sync-settings-label">New Code</div>
+                <input type="text" id="syncNewCode" placeholder="Enter new code" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="sync-settings-row">
+                <div class="sync-settings-label">Your Name</div>
+                <input type="text" id="syncNameEdit" placeholder="Your name" autocomplete="off" spellcheck="false" maxlength="15">
+            </div>
+            <button class="sync-settings-save" id="syncSettingsSave">Save</button>
         </div>
     </div>
 
@@ -933,7 +1037,8 @@
                         type: resetType,
                         amount: resetAmount,
                         date: new Date().toISOString(),
-                        label: 'Reset to $0'
+                        label: 'Reset to $0',
+                        name: localStorage.getItem('cashTrackerName') || ''
                     });
                 }
                 currentMode = null;
@@ -982,7 +1087,8 @@
                 type: type,
                 amount: amount,
                 date: new Date().toISOString(),
-                label: currentLabel || ''
+                label: currentLabel || '',
+                name: localStorage.getItem('cashTrackerName') || ''
             });
 
             currentInput = '';
@@ -1069,7 +1175,10 @@
                                 <div class="history-date">${formatDate(t.date)}</div>
                             </div>
                         </div>
-                        <div class="history-new-total">New Total: ${totalStr}</div>
+                        <div class="history-new-total">
+                            <span>New Total: ${totalStr}</span>
+                            ${t.name ? `<span class="history-name">${t.name}</span>` : ''}
+                        </div>
                     </div>
                 `;
             }).join('');
@@ -1307,11 +1416,17 @@
 
         // ========== SYNC CONNECT ==========
         document.getElementById('syncConnectBtn').addEventListener('click', () => {
+            const name = document.getElementById('nameInput').value.trim();
             const code = document.getElementById('roomCodeInput').value.trim().toLowerCase();
+            if (!name) {
+                alert('Please enter your name');
+                return;
+            }
             if (code.length < 3) {
                 alert('Please enter a code with at least 3 characters');
                 return;
             }
+            localStorage.setItem('cashTrackerName', name);
             connectToRoom(code);
         });
 
@@ -1319,14 +1434,53 @@
             if (e.key === 'Enter') document.getElementById('syncConnectBtn').click();
         });
 
-        // Tap sync dot to see/change room code
-        document.getElementById('syncDot').addEventListener('click', () => {
-            const current = localStorage.getItem('cashTrackerRoom') || '(none)';
-            const newCode = prompt('Current code: ' + current + '\n\nEnter a new code to switch, or cancel to keep it:');
-            if (newCode !== null && newCode.trim().length >= 3) {
-                if (unsubscribe) unsubscribe();
-                connectToRoom(newCode.trim().toLowerCase());
+        // Sync settings panel
+        const syncOverlay = document.getElementById('syncSettingsOverlay');
+        const syncPanel = document.getElementById('syncSettingsPanel');
+
+        function openSyncSettings() {
+            document.getElementById('syncCurrentCode').textContent = localStorage.getItem('cashTrackerRoom') || '—';
+            document.getElementById('syncNameEdit').value = localStorage.getItem('cashTrackerName') || '';
+            document.getElementById('syncNewCode').value = '';
+            syncOverlay.style.display = 'block';
+        }
+
+        function closeSyncSettings() {
+            syncOverlay.style.display = 'none';
+        }
+
+        // Tap sync dot to toggle panel
+        document.getElementById('syncDot').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (syncOverlay.style.display === 'block') {
+                closeSyncSettings();
+            } else {
+                openSyncSettings();
             }
+        });
+
+        // Tap outside panel to close
+        syncOverlay.addEventListener('click', (e) => {
+            if (!syncPanel.contains(e.target)) {
+                closeSyncSettings();
+            }
+        });
+
+        // Save button
+        document.getElementById('syncSettingsSave').addEventListener('click', () => {
+            const newName = document.getElementById('syncNameEdit').value.trim();
+            const newCode = document.getElementById('syncNewCode').value.trim().toLowerCase();
+
+            if (newName) {
+                localStorage.setItem('cashTrackerName', newName);
+            }
+
+            if (newCode && newCode.length >= 3) {
+                if (unsubscribe) unsubscribe();
+                connectToRoom(newCode);
+            }
+
+            closeSyncSettings();
         });
 
         // ========== INIT ==========
