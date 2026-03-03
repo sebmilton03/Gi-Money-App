@@ -539,6 +539,9 @@
             margin-left: 8px;
             vertical-align: middle;
             transition: background 0.3s;
+            cursor: pointer;
+            padding: 10px;
+            background-clip: content-box;
         }
 
         .sync-dot.connected {
@@ -1314,6 +1317,16 @@
 
         document.getElementById('roomCodeInput').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') document.getElementById('syncConnectBtn').click();
+        });
+
+        // Tap sync dot to see/change room code
+        document.getElementById('syncDot').addEventListener('click', () => {
+            const current = localStorage.getItem('cashTrackerRoom') || '(none)';
+            const newCode = prompt('Current code: ' + current + '\n\nEnter a new code to switch, or cancel to keep it:');
+            if (newCode !== null && newCode.trim().length >= 3) {
+                if (unsubscribe) unsubscribe();
+                connectToRoom(newCode.trim().toLowerCase());
+            }
         });
 
         // ========== INIT ==========
