@@ -1,4 +1,4 @@
-const CACHE_NAME = 'weekly-expenses-v3';
+const CACHE_NAME = 'weekly-expenses-v4';
 const ASSETS = [
     './',
     './index.html',
@@ -28,7 +28,15 @@ self.addEventListener('activate', event => {
 });
 
 // Fetch — serve from cache, fall back to network
+// Firebase/Firestore API calls always go to network
 self.addEventListener('fetch', event => {
+    const url = event.request.url;
+    if (url.includes('firestore.googleapis.com') ||
+        url.includes('firebaseio.com') ||
+        url.includes('googleapis.com/google.firestore')) {
+        event.respondWith(fetch(event.request));
+        return;
+    }
     event.respondWith(
         caches.match(event.request).then(cached => cached || fetch(event.request))
     );
